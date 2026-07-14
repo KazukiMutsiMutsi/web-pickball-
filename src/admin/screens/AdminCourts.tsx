@@ -8,6 +8,10 @@ export default function AdminCourts() {
   const [editing, setEditing] = useState<AdminCourt | null>(null);
   const [form, setForm] = useState<Partial<AdminCourt>>({});
 
+  // ── Inline price editing state ─────────────────────────────────────────────
+  const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
+  const [priceInput,     setPriceInput]     = useState('');
+
   const openEdit = (c: AdminCourt) => { setEditing(c); setForm({ ...c }); };
   const closeEdit = () => { setEditing(null); setForm({}); };
 
@@ -23,6 +27,21 @@ export default function AdminCourts() {
     if (!court) return;
     updateCourt(id, { active: !court.active });
     setCourts(getAllCourts() as AdminCourt[]);
+  };
+
+  // ── Inline price helpers ───────────────────────────────────────────────────
+  const startPriceEdit = (c: AdminCourt) => {
+    setEditingPriceId(c.id);
+    setPriceInput(String(c.pricePerHour));
+  };
+
+  const commitPriceEdit = (id: string) => {
+    const val = Number(priceInput);
+    if (!isNaN(val) && val > 0) {
+      updateCourt(id, { pricePerHour: val });
+      setCourts(getAllCourts() as AdminCourt[]);
+    }
+    setEditingPriceId(null);
   };
 
   return (
@@ -45,7 +64,36 @@ export default function AdminCourts() {
 
               <div style={s.meta}>
                 <div style={s.metaRow}><span>📍</span> {c.location}</div>
-                <div style={s.metaRow}><span>💰</span> ₱{c.pricePerHour}/hr</div>
+                <div style={s.metaRow}>
+                  <span>💰</span>
+                  {editingPriceId === c.id ? (
+                    <div style={s.priceEditWrap}>
+                      <span style={s.pricePrefix}>₱</span>
+                      <input
+                        autoFocus
+                        type="number"
+                        min={1}
+                        value={priceInput}
+                        onChange={(e) => setPriceInput(e.target.value)}
+                        onBlur={() => commitPriceEdit(c.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitPriceEdit(c.id);
+                          if (e.key === 'Escape') setEditingPriceId(null);
+                        }}
+                        style={s.priceInput}
+                      />
+                      <span style={s.priceHint}>/hr — press Enter to save</span>
+                    </div>
+                  ) : (
+                    <span
+                      style={s.priceDisplay}
+                      onClick={() => startPriceEdit(c)}
+                      title="Click to edit price"
+                    >
+                      ₱{c.pricePerHour}/hr <span style={s.priceEditIcon}>✏️</span>
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div style={s.statsRow}>
@@ -112,6 +160,12 @@ const s: Record<string, React.CSSProperties> = {
   statusBadge: { fontSize:11, fontWeight:700, padding:'2px 9px', borderRadius:99 },
   meta:        { display:'flex', flexDirection:'column', gap:5 },
   metaRow:     { display:'flex', alignItems:'center', gap:7, fontSize:13, color:'#475569' },
+  priceDisplay:{ cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5, borderRadius:6, padding:'2px 6px', background:'#f8fafc', border:'1.5px dashed #e2e8f0', fontWeight:700, color:'#0f172a', transition:'background 150ms' },
+  priceEditIcon:{ fontSize:11, opacity:0.5 },
+  priceEditWrap:{ display:'flex', alignItems:'center', gap:6, flex:1 },
+  pricePrefix: { fontSize:13, fontWeight:700, color:'#475569' },
+  priceInput:  { width:80, padding:'3px 8px', border:'1.5px solid #7c3aed', borderRadius:6, fontSize:13, fontWeight:700, color:'#0f172a', outline:'none', background:'#faf5ff' },
+  priceHint:   { fontSize:11, color:'#94a3b8', fontStyle:'italic' as const },
   statsRow:    { display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, background:'#f8fafc', borderRadius:10, padding:12 },
   stat:        { display:'flex', flexDirection:'column', alignItems:'center', gap:3 },
   statVal:     { fontSize:18, fontWeight:900, color:'#0f172a' },
