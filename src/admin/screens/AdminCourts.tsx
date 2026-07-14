@@ -8,11 +8,12 @@ export default function AdminCourts() {
   const [editing, setEditing] = useState<AdminCourt | null>(null);
   const [form, setForm] = useState<Partial<AdminCourt>>({});
 
-  // ── Inline price editing state ─────────────────────────────────────────────
-  const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
-  const [priceInput,     setPriceInput]     = useState('');
+  // live price values keyed by court id
+  const [prices, setPrices] = useState<Record<string, string>>(() =>
+    Object.fromEntries((getAllCourts() as AdminCourt[]).map(c => [c.id, String(c.pricePerHour)]))
+  );
 
-  const openEdit = (c: AdminCourt) => { setEditing(c); setForm({ ...c }); };
+  const openEdit  = (c: AdminCourt) => { setEditing(c); setForm({ ...c }); };
   const closeEdit = () => { setEditing(null); setForm({}); };
 
   const saveEdit = () => {
@@ -29,19 +30,15 @@ export default function AdminCourts() {
     setCourts(getAllCourts() as AdminCourt[]);
   };
 
-  // ── Inline price helpers ───────────────────────────────────────────────────
-  const startPriceEdit = (c: AdminCourt) => {
-    setEditingPriceId(c.id);
-    setPriceInput(String(c.pricePerHour));
-  };
-
-  const commitPriceEdit = (id: string) => {
-    const val = Number(priceInput);
-    if (!isNaN(val) && val > 0) {
+  const handlePriceChange = (id: string, raw: string) => {
+    // allow only digits while typing
+    if (raw !== '' && !/^\d+$/.test(raw)) return;
+    setPrices(p => ({ ...p, [id]: raw }));
+    const val = Number(raw);
+    if (val > 0) {
       updateCourt(id, { pricePerHour: val });
       setCourts(getAllCourts() as AdminCourt[]);
     }
-    setEditingPriceId(null);
   };
 
   return (
@@ -66,33 +63,16 @@ export default function AdminCourts() {
                 <div style={s.metaRow}><span>📍</span> {c.location}</div>
                 <div style={s.metaRow}>
                   <span>💰</span>
-                  {editingPriceId === c.id ? (
-                    <div style={s.priceEditWrap}>
-                      <span style={s.pricePrefix}>₱</span>
-                      <input
-                        autoFocus
-                        type="number"
-                        min={1}
-                        value={priceInput}
-                        onChange={(e) => setPriceInput(e.target.value)}
-                        onBlur={() => commitPriceEdit(c.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') commitPriceEdit(c.id);
-                          if (e.key === 'Escape') setEditingPriceId(null);
-                        }}
-                        style={s.priceInput}
-                      />
-                      <span style={s.priceHint}>/hr — press Enter to save</span>
-                    </div>
-                  ) : (
-                    <span
-                      style={s.priceDisplay}
-                      onClick={() => startPriceEdit(c)}
-                      title="Click to edit price"
-                    >
-                      ₱{c.pricePerHour}/hr <span style={s.priceEditIcon}>✏️</span>
-                    </span>
-                  )}
+                  <span style={s.pricePrefix}>₱</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={prices[c.id] ?? String(c.pricePerHour)}
+                    onChange={(e) => handlePriceChange(c.id, e.target.value)}
+                    style={s.priceInput}
+                    aria-label={`Price per hour for ${c.name}`}
+                  />
+                  <span style={s.priceSuffix}>/hr</span>
                 </div>
               </div>
 
@@ -159,13 +139,10 @@ const s: Record<string, React.CSSProperties> = {
   typeBadge:   { fontSize:10, fontWeight:700, background:'#f1f5f9', color:'#475569', padding:'2px 8px', borderRadius:99, textTransform:'uppercase' as const },
   statusBadge: { fontSize:11, fontWeight:700, padding:'2px 9px', borderRadius:99 },
   meta:        { display:'flex', flexDirection:'column', gap:5 },
-  metaRow:     { display:'flex', alignItems:'center', gap:7, fontSize:13, color:'#475569' },
-  priceDisplay:{ cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5, borderRadius:6, padding:'2px 6px', background:'#f8fafc', border:'1.5px dashed #e2e8f0', fontWeight:700, color:'#0f172a', transition:'background 150ms' },
-  priceEditIcon:{ fontSize:11, opacity:0.5 },
-  priceEditWrap:{ display:'flex', alignItems:'center', gap:6, flex:1 },
-  pricePrefix: { fontSize:13, fontWeight:700, color:'#475569' },
-  priceInput:  { width:80, padding:'3px 8px', border:'1.5px solid #7c3aed', borderRadius:6, fontSize:13, fontWeight:700, color:'#0f172a', outline:'none', background:'#faf5ff' },
-  priceHint:   { fontSize:11, color:'#94a3b8', fontStyle:'italic' as const },
+  metaRow:     { display:'flex', alignItems:'center', gap:6, fontSize:13, color:'#475569' },
+  pricePrefix: { fontWeight:700, color:'#475569' },
+  priceInput:  { width:72, padding:'4px 8px', border:'1.5px solid #e2e8f0', borderRadius:6, fontSize:13, fontWeight:700, color:'#0f172a', outline:'none', background:'#f8fafc', MozAppearance:'textfield' as const },
+  priceSuffix: { fontSize:13, color:'#94a3b8' },
   statsRow:    { display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, background:'#f8fafc', borderRadius:10, padding:12 },
   stat:        { display:'flex', flexDirection:'column', alignItems:'center', gap:3 },
   statVal:     { fontSize:18, fontWeight:900, color:'#0f172a' },
