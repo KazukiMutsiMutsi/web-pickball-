@@ -69,7 +69,22 @@ export default function AdminSettings() {
 
       <Section title="💰 Pricing">
         <Field label="Price per Hour (₱)" description="Applied to all courts">
-          <input style={s.input} type="number" min={0} value={settings.pricePerHour} onChange={e=>update('pricePerHour',Number(e.target.value))} />
+          <div style={s.priceWrap}>
+            <span style={s.priceSymbol}>₱</span>
+            <input
+              style={s.priceInput}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={settings.pricePerHour === 0 ? '' : String(settings.pricePerHour)}
+              placeholder="0"
+              onChange={e => {
+                const raw = e.target.value.replace(/[^0-9]/g, '');
+                update('pricePerHour', raw === '' ? 0 : parseInt(raw, 10));
+              }}
+            />
+            <span style={s.priceHint}>/hr</span>
+          </div>
         </Field>
         <Field label="Service Fee (%)" description="Added to booking total at checkout">
           <input style={s.input} type="number" min={0} max={100} value={settings.serviceFeePercent} onChange={e=>update('serviceFeePercent',Number(e.target.value))} />
@@ -118,5 +133,9 @@ const s: Record<string, React.CSSProperties> = {
   fieldLabel:  { fontSize:13, fontWeight:700, color:'#0f172a' },
   fieldDesc:   { fontSize:11, color:'#94a3b8', marginTop:2 },
   input:       { padding:'8px 12px', border:'1.5px solid #e2e8f0', borderRadius:8, fontSize:13, color:'#0f172a', outline:'none', width:120, textAlign:'right' as const },
+  priceWrap:   { display:'flex', alignItems:'center', gap:6, background:'#f8fafc', border:'1.5px solid #e2e8f0', borderRadius:8, padding:'0 10px' },
+  priceSymbol: { fontSize:14, fontWeight:700, color:'#475569', flexShrink:0 },
+  priceInput:  { padding:'8px 4px', border:'none', outline:'none', fontSize:15, fontWeight:800, color:'#0f172a', background:'transparent', width:90, textAlign:'right' as const },
+  priceHint:   { fontSize:12, color:'#94a3b8', flexShrink:0 },
   saveBtn:     { padding:'12px 28px', background:'#7c3aed', border:'none', borderRadius:10, color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer', alignSelf:'flex-start' },
 };

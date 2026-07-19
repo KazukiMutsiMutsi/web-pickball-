@@ -3,6 +3,7 @@ import { AdminPortal } from './admin/AdminApp';
 import { AdminAuthProvider, useAdminAuth } from './admin/context/AdminAuthContext';
 import { StaffPortal } from './staff/StaffApp';
 import { StaffAuthProvider, useStaffAuth } from './staff/context/StaffAuthContext';
+import PickleballIcon from './components/PickleballIcon';
 
 type Role = 'admin' | 'staff';
 
@@ -68,7 +69,9 @@ function UnifiedLogin({ onSuccess }: { onSuccess: (role: Role) => void }) {
 
         {/* Brand */}
         <div style={s.brand}>
-          <span style={s.brandIcon}>🏓</span>
+          <div style={s.brandIconWrap}>
+            <PickleballIcon size={44} color="#fff" />
+          </div>
           <div style={s.brandName}>PicklePro</div>
           <div style={s.brandTagline}>Pickleball Court Management</div>
         </div>
@@ -170,7 +173,7 @@ const s: Record<string, React.CSSProperties> = {
   card:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 20, padding: '40px 36px', width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 20 },
 
   brand:       { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 },
-  brandIcon:   { fontSize: 48 },
+  brandIconWrap:{ width: 64, height: 64, borderRadius: 16, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   brandName:   { fontSize: 26, fontWeight: 900, color: '#fff', letterSpacing: -0.5 },
   brandTagline:{ fontSize: 11, fontWeight: 700, color: '#475569', letterSpacing: 1.5, textTransform: 'uppercase' },
 

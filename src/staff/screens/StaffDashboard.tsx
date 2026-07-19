@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import StatusBadge from '../components/StatusBadge';
-import { getAllBookings, getAllCourts } from '@/src/booking/bookingStore';
+import { getAllBookings, getAllCourts, updateBooking } from '@/src/booking/bookingStore';
 import { TODAY } from '../data/mock';
 import { fmt12 } from '../utils/time';
+import type { BookingStatus, StaffBooking } from '../types';
 
 const IMG_LEFT  = '/qwerty.jpg';
 const IMG_RIGHT = '/imageg1.webp';
@@ -15,9 +16,9 @@ function getTimeOfDay() {
 }
 
 export default function StaffDashboard() {
-  const STAFF_BOOKINGS = getAllBookings();
+  const [bookings, setBookings] = useState<StaffBooking[]>(getAllBookings());
   const STAFF_COURTS   = getAllCourts();
-  const todayBookings = STAFF_BOOKINGS.filter((b) => b.date === TODAY);
+  const todayBookings = bookings.filter((b) => b.date === TODAY);
   const total         = todayBookings.length;
   const checkedIn     = todayBookings.filter((b) => b.status === 'checked_in').length;
   const pending       = todayBookings.filter((b) => b.status === 'pending').length;
@@ -29,6 +30,11 @@ export default function StaffDashboard() {
     .filter((b) => b.status === 'confirmed' || b.status === 'pending' || b.status === 'reschedule_requested')
     .sort((a, b) => a.startTime.localeCompare(b.startTime))
     .slice(0, 5);
+
+  const doAction = (id: string, status: BookingStatus) => {
+    updateBooking(id, { status });
+    setBookings(getAllBookings());
+  };
 
   const stats = [
     { icon: '📅', label: "Today's Bookings", value: total,        sub: `${completed} completed`,          accent: '#2563eb' },
@@ -89,7 +95,7 @@ export default function StaffDashboard() {
         ))}
       </div>
 
-      {/* Two column */}
+      {/* Two column — stacks on small screens */}
       <div style={s.twoCol}>
         {/* Upcoming table */}
         <div style={s.tableCard}>
@@ -101,14 +107,14 @@ export default function StaffDashboard() {
             <table style={s.table}>
               <thead>
                 <tr>
-                  {['Player', 'Court', 'Time', 'Paid', 'Status'].map((h) => (
+                  {['Player', 'Court', 'Time', 'Paid', 'Status', 'Action'].map((h) => (
                     <th key={h} style={s.th}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {upcoming.length === 0 ? (
-                  <tr><td colSpan={5} style={s.emptyCell}>✓ No pending bookings</td></tr>
+                  <tr><td colSpan={6} style={s.emptyCell}>✓ No pending bookings</td></tr>
                 ) : upcoming.map((b) => (
                   <tr key={b.id} style={{ ...s.tr, ...(b.status === 'reschedule_requested' ? s.trReschedule : {}) }}>
                     <td style={s.td}>
@@ -126,6 +132,22 @@ export default function StaffDashboard() {
                       <span style={b.paid ? s.paidBadge : s.unpaidBadge}>{b.paid ? '✓ Paid' : 'Unpaid'}</span>
                     </td>
                     <td style={s.td}><StatusBadge status={b.status} size="sm" /></td>
+                    <td style={s.td}>
+                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' as const }}>
+                        {b.status === 'pending' && (
+                          <>
+                            <button style={s.qaGreen} onClick={() => doAction(b.id, 'confirmed')}>✓ Approve</button>
+                            <button style={s.qaRed}   onClick={() => doAction(b.id, 'cancelled')}>✕</button>
+                          </>
+                        )}
+                        {b.status === 'confirmed' && (
+                          <button style={s.qaBlue} onClick={() => doAction(b.id, 'checked_in')}>On Court</button>
+                        )}
+                        {b.status === 'reschedule_requested' && (
+                          <span style={{ fontSize: 11, color: '#7c3aed', fontWeight: 600 }}>↻ See Schedule</span>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -288,7 +310,7 @@ const s: Record<string, React.CSSProperties> = {
   statValue:   { fontSize: 26, fontWeight: 900, color: '#0f172a' },
   statLabel:   { fontSize: 12, fontWeight: 700, color: '#0f172a' },
   statSub:     { fontSize: 11, color: '#94a3b8' },
-  twoCol:      { display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, alignItems: 'start' },
+  twoCol:      { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))', gap: 20, alignItems: 'start' },
   tableCard:   { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' },
   courtCard:   { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' },
   cardHead:    { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' },
@@ -307,6 +329,10 @@ const s: Record<string, React.CSSProperties> = {
   playerPhone: { fontSize: 11, color: '#94a3b8' },
   paidBadge:   { display: 'inline-block', padding: '2px 9px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: '#dcfce7', color: '#15803d' },
   unpaidBadge: { display: 'inline-block', padding: '2px 9px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: '#fef3c7', color: '#b45309' },
+  // quick action buttons
+  qaGreen:     { padding: '4px 10px', borderRadius: 6, border: 'none', background: '#16a34a', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const },
+  qaRed:       { padding: '4px 8px',  borderRadius: 6, border: 'none', background: '#dc2626', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' },
+  qaBlue:      { padding: '4px 10px', borderRadius: 6, border: 'none', background: '#2563eb', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const },
   courtRow:    { display: 'flex', alignItems: 'center', gap: 12, padding: '13px 20px', borderBottom: '1px solid #f1f5f9' },
   courtDot:    { width: 10, height: 10, borderRadius: '50%', flexShrink: 0 },
   courtName:   { fontSize: 13, fontWeight: 700, color: '#0f172a' },

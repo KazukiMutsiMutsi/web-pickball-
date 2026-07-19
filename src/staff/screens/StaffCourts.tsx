@@ -100,6 +100,110 @@ const m: Record<string, React.CSSProperties> = {
   btnConfirm:  { padding: '9px 18px', borderRadius: 8, border: 'none', background: '#0f172a', color: '#fff', fontSize: 13, fontWeight: 700 },
 };
 
+// ─── Court Availability Timeline ─────────────────────────────────────────────
+const TIMELINE_START = 8;  // 8 AM
+const TIMELINE_END   = 22; // 10 PM
+const HOURS_COUNT    = TIMELINE_END - TIMELINE_START;
+
+const STATUS_COLOR_MAP: Record<string, string> = {
+  confirmed:            '#2563eb',
+  pending:              '#d97706',
+  checked_in:           '#16a34a',
+  completed:            '#94a3b8',
+  cancelled:            'transparent',
+  no_show:              'transparent',
+  reschedule_requested: '#7c3aed',
+};
+
+function toMin(t: string) {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function CourtTimeline({ courtId }: { courtId: string }) {
+  const bookings = getAllBookings().filter(
+    (b) => b.courtId === courtId && b.date === TODAY && b.status !== 'cancelled' && b.status !== 'no_show',
+  );
+  const now    = new Date();
+  const nowPct = Math.min(100, Math.max(0,
+    ((now.getHours() + now.getMinutes() / 60) - TIMELINE_START) / HOURS_COUNT * 100,
+  ));
+  const hourLabels = Array.from({ length: HOURS_COUNT + 1 }, (_, i) => {
+    const h = TIMELINE_START + i;
+    return h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
+  });
+
+  return (
+    <div style={tl.wrap}>
+      {/* Hour labels */}
+      <div style={tl.labelRow}>
+        {hourLabels.map((lbl, i) => (
+          <div key={i} style={{ ...tl.label, left: `${(i / HOURS_COUNT) * 100}%` }}>{lbl}</div>
+        ))}
+      </div>
+
+      {/* Track */}
+      <div style={tl.track}>
+        {/* Hour grid lines */}
+        {hourLabels.map((_, i) => (
+          <div key={i} style={{ ...tl.gridLine, left: `${(i / HOURS_COUNT) * 100}%` }} />
+        ))}
+
+        {/* Free background */}
+        <div style={tl.freeBg} />
+
+        {/* Booking blocks */}
+        {bookings.map((b) => {
+          const startMin = toMin(b.startTime);
+          const endMin   = toMin(b.endTime);
+          const startPct = Math.max(0, (startMin / 60 - TIMELINE_START) / HOURS_COUNT * 100);
+          const widthPct = Math.min(100 - startPct, (endMin - startMin) / 60 / HOURS_COUNT * 100);
+          const color    = STATUS_COLOR_MAP[b.status] ?? '#64748b';
+          return (
+            <div
+              key={b.id}
+              title={`${b.playerName} · ${b.startTime}–${b.endTime} · ${b.status}`}
+              style={{
+                position: 'absolute',
+                left: `${startPct}%`,
+                width: `${widthPct}%`,
+                top: 2, bottom: 2,
+                background: color,
+                borderRadius: 4,
+                opacity: 0.9,
+                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                paddingLeft: 5,
+              }}
+            >
+              <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {b.playerName.split(' ')[0]}
+              </span>
+            </div>
+          );
+        })}
+
+        {/* Now indicator */}
+        <div style={{ ...tl.nowLine, left: `${nowPct}%` }}>
+          <div style={tl.nowDot} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const tl: Record<string, React.CSSProperties> = {
+  wrap:     { marginTop: 8 },
+  labelRow: { position: 'relative', height: 16, marginBottom: 2 },
+  label:    { position: 'absolute', fontSize: 9, color: '#94a3b8', transform: 'translateX(-50%)', whiteSpace: 'nowrap' },
+  track:    { position: 'relative', height: 28, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden' },
+  gridLine: { position: 'absolute', top: 0, bottom: 0, width: 1, background: '#e2e8f0', zIndex: 0 },
+  freeBg:   { position: 'absolute', inset: 0, background: '#f0fdf4', zIndex: 0 },
+  nowLine:  { position: 'absolute', top: 0, bottom: 0, width: 2, background: '#ef4444', zIndex: 10, transform: 'translateX(-50%)' },
+  nowDot:   { width: 6, height: 6, borderRadius: '50%', background: '#ef4444', position: 'absolute', top: -3, left: -2 },
+};
+
 // ─── Main screen ─────────────────────────────────────────────────────────────
 export default function StaffCourts() {
   const [courts,       setCourts]       = useState<CourtState[]>(getAllCourts());
@@ -205,6 +309,14 @@ export default function StaffCourts() {
                   <div style={{ ...s.courtStatValue, color: nowPlaying > 0 ? '#16a34a' : '#94a3b8' }}>{nowPlaying}</div>
                   <div style={s.courtStatLabel}>playing now</div>
                 </div>
+              </div>
+
+              {/* Availability Timeline */}
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 }}>
+                  Today's Timeline
+                </div>
+                <CourtTimeline courtId={court.id} />
               </div>
 
               {/* Status bar */}
