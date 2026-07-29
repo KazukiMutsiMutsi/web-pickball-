@@ -1,5 +1,5 @@
-import { Court } from '@/src/components/CourtCard';
-import { courtsService } from '@/src/services/courts.service';
+import { Court } from '../components/CourtCard';
+import { courtsService } from '../services/courts.service';
 import { useEffect, useState } from 'react';
 
 export function useCourts() {

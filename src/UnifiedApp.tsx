@@ -8,8 +8,10 @@ type Role = 'admin' | 'staff';
 
 function detectRole(email: string): Role | null {
   const e = email.trim().toLowerCase();
-  if (e === 'admin@picklepro.com') return 'admin';
+  // Staff emails are known fixed accounts
   if (e === 'staff@picklepro.com') return 'staff';
+  // Any other email → try admin login (Supabase will reject if not admin)
+  if (e.length > 0) return 'admin';
   return null;
 }
 
@@ -149,7 +151,6 @@ function UnifiedLogin({ onSuccess }: { onSuccess: (role: Role) => void }) {
             {detectedRole === 'staff' && (
               <><UserCheckIcon color={accent} /><span style={{ color: accent, fontSize: 12, fontWeight: 600 }}>Staff Portal — Operations access</span></>
             )}
-            {!detectedRole && <span>&nbsp;</span>}
           </div>
 
           {/* Error */}

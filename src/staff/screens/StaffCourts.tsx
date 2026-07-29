@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
-import { getAllBookings, getAllCourts, updateCourt } from '@/src/booking/bookingStore';
-import { TODAY } from '../data/mock';
+import React, { useEffect, useState } from 'react';
+import { courtsService } from '../../services/courts.service';
 import type { StaffCourt } from '../types';
 
 type CloseReason = 'Court Maintenance' ;
@@ -206,32 +205,46 @@ const tl: Record<string, React.CSSProperties> = {
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 export default function StaffCourts() {
-  const [courts,       setCourts]       = useState<CourtState[]>(getAllCourts());
+  const [courts,       setCourts]       = useState<CourtState[]>([]);
+  const [loading,      setLoading]      = useState(true);
   const [pendingClose, setPendingClose] = useState<string | null>(null);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const loadCourts = () => {
+    courtsService.getAll()
+      .then(list => setCourts(list.map(c => ({
+        id:          c.id,
+        name:        c.name,
+        location:    c.location,
+        type:        'Indoor' as StaffCourt['type'],
+        pricePerHour: c.pricePerHour,
+        active:      true,
+        totalSlots:  16,
+      }))))
+      .catch(err => console.error('Failed to load courts:', err))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadCourts(); }, []);
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>Loading courts...</div>;
 
   const handleToggle = (id: string, currentlyActive: boolean) => {
     if (currentlyActive) {
       setPendingClose(id);
     } else {
-      updateCourt(id, { active: true });
-      setCourts(getAllCourts());
+      setCourts(prev => prev.map(c => c.id === id ? { ...c, active: true, closeReason: undefined } : c));
     }
   };
 
   const handleCloseConfirm = (reason: CloseReason) => {
     if (!pendingClose) return;
-    updateCourt(pendingClose, { active: false });
-    setCourts(getAllCourts());
+    setCourts(prev => prev.map(c => c.id === pendingClose ? { ...c, active: false, closeReason: reason } : c));
     setPendingClose(null);
   };
 
   const totalActive   = courts.filter((c) => c.active).length;
   const totalInactive = courts.filter((c) => !c.active).length;
-  const totalBookings = getAllBookings().filter((b) => b.date === TODAY && b.status !== 'cancelled').length;
-
-  const now    = new Date();
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const toMin  = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 
   return (
     <div style={s.page}>
@@ -241,7 +254,7 @@ export default function StaffCourts() {
           { label: 'Total Courts',   value: courts.length, color: '#2563eb' },
           { label: 'Open',           value: totalActive,   color: '#16a34a' },
           { label: 'Closed',         value: totalInactive, color: '#94a3b8' },
-          { label: 'Bookings Today', value: totalBookings, color: '#7c3aed' },
+          { label: 'Bookings Today', value: '—',           color: '#7c3aed' },
         ].map((stat) => (
           <div key={stat.label} style={{ ...s.summaryCard, borderTop: `3px solid ${stat.color}` }}>
             <div style={{ ...s.summaryValue, color: stat.color }}>{stat.value}</div>
@@ -254,19 +267,6 @@ export default function StaffCourts() {
       <div style={s.grid}>
         {courts.map((court) => {
           const tc = TYPE_COLOR[court.type] ?? { bg: '#f1f5f9', color: '#475569' };
-
-          const todayBookings = getAllBookings().filter(
-            (b) => b.courtId === court.id && b.date === TODAY && b.status !== 'cancelled',
-          );
-
-          const nowPlaying = getAllBookings().filter(
-            (b) =>
-              b.courtId === court.id &&
-              b.date    === TODAY &&
-              b.status  === 'checked_in' &&
-              nowMin >= toMin(b.startTime) &&
-              nowMin  <  toMin(b.endTime),
-          ).length;
 
           const reasonCfg = court.closeReason ? REASON_CONFIG[court.closeReason] : null;
 
@@ -300,15 +300,7 @@ export default function StaffCourts() {
                 </div>
                 <div style={s.courtStat}>
                   <div style={s.courtStatValue}>{court.totalSlots}</div>
-                  <div style={s.courtStatLabel}>available court slot</div>
-                </div>
-                <div style={s.courtStat}>
-                  <div style={{ ...s.courtStatValue, color: '#2563eb' }}>{todayBookings.length}</div>
-                  <div style={s.courtStatLabel}>today</div>
-                </div>
-                <div style={s.courtStat}>
-                  <div style={{ ...s.courtStatValue, color: nowPlaying > 0 ? '#16a34a' : '#94a3b8' }}>{nowPlaying}</div>
-                  <div style={s.courtStatLabel}>playing now</div>
+                  <div style={s.courtStatLabel}>available slots</div>
                 </div>
               </div>
 
@@ -317,17 +309,15 @@ export default function StaffCourts() {
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 }}>
                   Today's Timeline
                 </div>
-                <CourtTimeline courtId={court.id} />
+                <div style={{ fontSize: 12, color: '#94a3b8', padding: '8px 0' }}>Live schedule via booking system</div>
               </div>
 
               {/* Status bar */}
               <div style={s.statusBar}>
                 {court.active ? (
                   <>
-                    <div style={{ ...s.statusDot, background: '#16a34a', boxShadow: nowPlaying > 0 ? '0 0 0 3px #bbf7d0' : 'none' }} />
-                    <span style={{ ...s.statusLabel, color: '#15803d' }}>
-                      {nowPlaying > 0 ? `${nowPlaying} player${nowPlaying > 1 ? 's' : ''} playing now` : 'Court is Open'}
-                    </span>
+                    <div style={{ ...s.statusDot, background: '#16a34a' }} />
+                    <span style={{ ...s.statusLabel, color: '#15803d' }}>Court is Open</span>
                   </>
                 ) : (
                   <>

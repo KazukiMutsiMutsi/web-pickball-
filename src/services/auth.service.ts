@@ -1,34 +1,13 @@
-// Authentication service
-// Replace with your actual auth provider (Supabase, Firebase, custom API, etc.)
+// Auth is handled directly via Supabase in AuthContext.tsx.
+// This file is kept for any extra profile-related calls to the Express API.
 
-export interface LoginPayload {
-  email: string;
-  password: string;
-}
-
-export interface RegisterPayload {
-  name: string;
-  email: string;
-  password: string;
-}
+export interface LoginPayload    { email: string; password: string; }
+export interface RegisterPayload { name: string; email: string; phone: string; password: string; }
 
 export interface AuthUser {
   id: string;
   name: string;
   email: string;
   token: string;
+  role: 'user' | 'admin';
 }
-
-export const authService = {
-  async login(_payload: LoginPayload): Promise<AuthUser> {
-    throw new Error('authService.login not implemented');
-  },
-
-  async register(_payload: RegisterPayload): Promise<AuthUser> {
-    throw new Error('authService.register not implemented');
-  },
-
-  async logout(): Promise<void> {
-    throw new Error('authService.logout not implemented');
-  },
-};

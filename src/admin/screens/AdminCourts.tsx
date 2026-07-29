@@ -1,10 +1,21 @@
-import React, { useState } from 'react';
-import { addCourt, deleteCourt, getAllBookings, getAllCourts, updateCourt } from '@/src/booking/bookingStore';
-import { TODAY } from '../data/mock';
+import React, { useEffect, useState } from 'react';
+import { adminService } from '../../services/admin.service';
+import type { AdminCourt as ApiAdminCourt } from '../../services/admin.service';
 import type { AdminCourt } from '../types';
 
 const A = '#6366f1';
 const EMPTY: Partial<AdminCourt> = { name:'', location:'', type:'Indoor', pricePerHour:210, active:true };
+
+function mapCourt(c: ApiAdminCourt): AdminCourt {
+  return {
+    id:           c.id,
+    name:         c.display_name ?? c.name,
+    location:     c.location,
+    type:         (c.sport === 'outdoor' ? 'Outdoor' : 'Indoor') as AdminCourt['type'],
+    pricePerHour: Number(c.hourly_rate),
+    active:       c.is_active,
+  };
+}
 
 /* ── Inline icons ─────────────────────────────────────────────────────────── */
 const ic = (d: string, size = 14, color = 'currentColor') => (
@@ -18,56 +29,74 @@ const TrashIcon = () => ic('M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01
 const PinIcon   = () => ic('M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0zM12 13a3 3 0 100-6 3 3 0 000 6z');
 
 export default function AdminCourts() {
-  const [courts,    setCourts]    = useState<AdminCourt[]>(getAllCourts() as AdminCourt[]);
+  const [courts,    setCourts]    = useState<AdminCourt[]>([]);
+  const [loading,   setLoading]   = useState(true);
   const [editing,   setEditing]   = useState<AdminCourt | null>(null);
   const [form,      setForm]      = useState<Partial<AdminCourt>>({});
   const [adding,    setAdding]    = useState(false);
   const [addForm,   setAddForm]   = useState<Partial<AdminCourt>>({ ...EMPTY });
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  const [prices,    setPrices]    = useState<Record<string,string>>(() =>
-    Object.fromEntries((getAllCourts() as AdminCourt[]).map(c => [c.id, String(c.pricePerHour)]))
-  );
+  const [prices,    setPrices]    = useState<Record<string,string>>({});
 
-  const refresh    = () => setCourts(getAllCourts() as AdminCourt[]);
+  const loadCourts = () => {
+    adminService.getCourts()
+      .then(list => {
+        const mapped = list.map(mapCourt);
+        setCourts(mapped);
+        setPrices(Object.fromEntries(mapped.map(c => [c.id, String(c.pricePerHour)])));
+      })
+      .catch(err => console.error('Failed to load courts:', err))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadCourts(); }, []);
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading courts...</div>;
+
   const openEdit   = (c: AdminCourt) => { setEditing(c); setForm({ ...c }); };
   const closeEdit  = () => { setEditing(null); setForm({}); };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editing) return;
-    updateCourt(editing.id, form as Partial<AdminCourt>);
-    refresh(); closeEdit();
+    await adminService.updateCourt(editing.id, {
+      displayName: form.name,
+      location:    form.location,
+      hourlyRate:  form.pricePerHour,
+      isActive:    form.active,
+    });
+    loadCourts(); closeEdit();
   };
 
-  const toggleActive = (id: string) => {
-    const c = courts.find(c => c.id === id);
-    if (!c) return;
-    updateCourt(id, { active: !c.active });
-    refresh();
+  const toggleActive = async (id: string, current: boolean) => {
+    await adminService.updateCourt(id, { isActive: !current });
+    loadCourts();
   };
 
   const handlePriceChange = (id: string, raw: string) => {
     if (raw !== '' && !/^\d+$/.test(raw)) return;
     setPrices(p => ({ ...p, [id]: raw }));
     const val = Number(raw);
-    if (val > 0) { updateCourt(id, { pricePerHour: val }); refresh(); }
+    if (val > 0) adminService.updateCourt(id, { hourlyRate: val }).then(loadCourts);
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!addForm.name?.trim()) return;
-    const newId = `c${Date.now()}`;
-    addCourt({ id:newId, name:addForm.name.trim(), location:addForm.location?.trim()||'', type:addForm.type??'Indoor', pricePerHour:Number(addForm.pricePerHour)||210, active:true } as any);
-    setPrices(p => ({ ...p, [newId]: String(addForm.pricePerHour||210) }));
-    refresh(); setAdding(false); setAddForm({ ...EMPTY });
+    await adminService.createCourt({
+      name:        addForm.name.trim().toLowerCase().replace(/\s+/g, '_'),
+      displayName: addForm.name.trim(),
+      sport:       'pickleball',
+      location:    addForm.location?.trim() || 'Pajo, Lapu-Lapu City',
+      hourlyRate:  Number(addForm.pricePerHour) || 210,
+    });
+    loadCourts(); setAdding(false); setAddForm({ ...EMPTY });
   };
 
-  const handleDelete = (id: string) => {
-    deleteCourt(id);
-    setPrices(p => { const c = { ...p }; delete c[id]; return c; });
-    refresh(); setConfirmId(null);
+  const handleDelete = async (id: string) => {
+    await adminService.deleteCourt(id);
+    loadCourts(); setConfirmId(null);
   };
 
-  const openCourts   = courts.filter(c => c.active).length;
-  const totalRevenue = getAllBookings().filter(b => b.paid).reduce((s,b)=>s+b.amount,0);
+  const openCourts = courts.filter(c => c.active).length;
 
   return (
     <div style={s.page}>
@@ -75,7 +104,7 @@ export default function AdminCourts() {
       <div style={s.pageHead}>
         <div>
           <h2 style={s.pageTitle}>Courts</h2>
-          <p style={s.pageSub}>{courts.length} courts &nbsp;·&nbsp; {openCourts} open &nbsp;·&nbsp; ₱{totalRevenue.toLocaleString()} total revenue</p>
+          <p style={s.pageSub}>{courts.length} courts &nbsp;·&nbsp; {openCourts} open</p>
         </div>
         <button style={s.btnAdd} onClick={() => setAdding(true)}>
           <PlusIcon /> Add Court
@@ -85,9 +114,6 @@ export default function AdminCourts() {
       {/* Grid */}
       <div style={s.grid}>
         {courts.map(c => {
-          const todayB = getAllBookings().filter(b => b.courtId === c.id && b.date === TODAY).length;
-          const totalB = getAllBookings().filter(b => b.courtId === c.id).length;
-          const rev    = getAllBookings().filter(b => b.courtId === c.id && b.paid).reduce((s,b)=>s+b.amount,0);
           return (
             <div key={c.id} style={{ ...s.card, opacity: c.active ? 1 : 0.65 }}>
               {/* Status bar */}
@@ -129,21 +155,16 @@ export default function AdminCourts() {
                   </div>
                 </div>
 
-                {/* Stats */}
+                {/* Stats — real booking counts removed (use AdminBookings for that) */}
                 <div style={s.statsRow}>
                   <div style={s.stat}>
-                    <div style={s.statNum}>{todayB}</div>
-                    <div style={s.statLbl}>Today</div>
+                    <div style={s.statNum}>₱{c.pricePerHour}/hr</div>
+                    <div style={s.statLbl}>Rate</div>
                   </div>
                   <div style={s.statLine} />
                   <div style={s.stat}>
-                    <div style={s.statNum}>{totalB}</div>
-                    <div style={s.statLbl}>All-time</div>
-                  </div>
-                  <div style={s.statLine} />
-                  <div style={s.stat}>
-                    <div style={{ ...s.statNum, color:'#16a34a' }}>₱{rev.toLocaleString()}</div>
-                    <div style={s.statLbl}>Revenue</div>
+                    <div style={{ ...s.statNum, color: c.active ? '#16a34a' : '#94a3b8' }}>{c.active ? 'Open' : 'Closed'}</div>
+                    <div style={s.statLbl}>Status</div>
                   </div>
                 </div>
 
@@ -154,7 +175,7 @@ export default function AdminCourts() {
                   </button>
                   <button
                     style={{ ...s.btnToggle, ...(c.active ? s.btnClose : s.btnOpen) }}
-                    onClick={() => toggleActive(c.id)}>
+                    onClick={() => toggleActive(c.id, c.active)}>
                     {c.active ? <><LockIcon /> Close</> : <><UnlockIcon /> Open</>}
                   </button>
                   <button style={s.btnRemove} onClick={() => setConfirmId(c.id)}>

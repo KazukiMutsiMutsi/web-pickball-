@@ -1,6 +1,6 @@
-import React from 'react';
-import { getAllBookings, getAllCourts } from '@/src/booking/bookingStore';
-import { TODAY, ADMIN_CUSTOMERS, ADMIN_STAFF } from '../data/mock';
+import React, { useEffect, useState } from 'react';
+import { adminService } from '../../services/admin.service';
+import type { ApiBooking } from '../../services/bookings.service';
 
 const A = '#6366f1';
 
@@ -13,43 +13,57 @@ const SL: Record<string,string> = {
   completed:'Completed', cancelled:'Cancelled', no_show:'No Show', reschedule_requested:'Reschedule',
 };
 
-/* ── SVG icons ────────────────────────────────────────────────────────────── */
 const ic = (d: string, size = 18, color = 'currentColor') => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
     <path d={d} />
   </svg>
 );
 
-export default function AdminDashboard() {
-  const bookings = getAllBookings();
-  const courts   = getAllCourts();
+interface ApiCourt { id: string; name: string; display_name: string; is_active: boolean; }
 
-  const todayB   = bookings.filter(b => b.date === TODAY);
-  const revenue  = bookings.filter(b => b.paid).reduce((s, b) => s + b.amount, 0);
-  const todayRev = todayB.filter(b => b.paid).reduce((s, b) => s + b.amount, 0);
+export default function AdminDashboard() {
+  const [bookings, setBookings] = useState<ApiBooking[]>([]);
+  const [courts,   setCourts]   = useState<ApiCourt[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const today = new Date().toISOString().slice(0, 10);
+
+  useEffect(() => {
+    Promise.all([
+      adminService.getBookings(),
+      fetch(`${import.meta.env.VITE_API_URL ?? 'http://localhost:5000'}/api/courts`).then(r => r.json()),
+    ])
+      .then(([b, { courts: c }]) => { setBookings(b); setCourts(c); })
+      .catch(err => console.error('Dashboard load error:', err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading dashboard...</div>;
+
+  const todayB   = bookings.filter(b => b.date === today);
+  const revenue  = bookings.filter(b => b.status === 'confirmed' || b.status === 'completed').reduce((s, b) => s + Number(b.total_amount), 0);
+  const todayRev = todayB.filter(b => b.status === 'confirmed' || b.status === 'completed').reduce((s, b) => s + Number(b.total_amount), 0);
   const pending  = todayB.filter(b => b.status === 'pending').length;
-  const active   = courts.filter(c => c.active).length;
+  const active   = courts.filter(c => c.is_active).length;
 
   const stats = [
     { label:'Total Revenue',    val:`₱${revenue.toLocaleString()}`,  sub:`₱${todayRev.toLocaleString()} today`, accent:'#16a34a', bg:'#f0fdf4', icon: ic('M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6') },
     { label:"Today's Bookings", val:String(todayB.length),            sub:`${pending} pending`,                  accent:'#2563eb', bg:'#eff6ff', icon: ic('M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z') },
-    { label:'Customers',        val:String(ADMIN_CUSTOMERS.length),   sub:`${ADMIN_CUSTOMERS.filter(u=>u.status==='active').length} active`, accent:'#0284c7', bg:'#f0f9ff', icon: ic('M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8z') },
+    { label:'Total Bookings',   val:String(bookings.length),          sub:'all time',                            accent:'#0284c7', bg:'#f0f9ff', icon: ic('M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8z') },
     { label:'Active Courts',    val:`${active} / ${courts.length}`,   sub:'available now',                       accent:'#7c3aed', bg:'#faf5ff', icon: ic('M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5') },
-    { label:'Staff On Duty',    val:String(ADMIN_STAFF.filter(s=>s.status==='active').length), sub:`of ${ADMIN_STAFF.length} total`, accent:'#d97706', bg:'#fffbeb', icon: ic('M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75') },
+    { label:'Pending Payments', val:String(bookings.filter(b=>b.status==='pending').length), sub:'awaiting confirmation', accent:'#d97706', bg:'#fffbeb', icon: ic('M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75') },
   ];
 
   const courtRevenue = courts.map(c => ({
-    name:     c.name,
-    revenue:  bookings.filter(b => b.courtId === c.id && b.paid).reduce((s, b) => s + b.amount, 0),
-    bookings: bookings.filter(b => b.courtId === c.id).length,
+    name:     c.display_name ?? c.name,
+    revenue:  bookings.filter(b => b.court_id === c.id && (b.status === 'confirmed' || b.status === 'completed')).reduce((s, b) => s + Number(b.total_amount), 0),
+    bookings: bookings.filter(b => b.court_id === c.id).length,
     pct:      0,
   }));
   const maxRev = Math.max(...courtRevenue.map(c => c.revenue), 1);
   courtRevenue.forEach(c => { c.pct = Math.round((c.revenue / maxRev) * 100); });
 
   const recent = [...bookings].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
-
-  const totalBookings = bookings.length;
+  const totalBookings  = bookings.length;
   const completedToday = todayB.filter(b => b.status === 'completed').length;
 
   return (
@@ -115,19 +129,21 @@ export default function AdminDashboard() {
               <tbody>
                 {recent.map((b, i) => (
                   <tr key={b.id} style={{ ...s.tr, background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
-                    <td style={{ ...s.td, fontFamily:'monospace', fontSize:11, color:'#94a3b8' }}>{b.id}</td>
+                    <td style={{ ...s.td, fontFamily:'monospace', fontSize:11, color:'#94a3b8' }}>{b.booking_ref ?? b.id}</td>
                     <td style={s.td}>
                       <div style={{ display:'flex', alignItems:'center', gap:9 }}>
-                        <div style={{ ...s.avatar, background: A + '18', color: A }}>{b.playerName[0]}</div>
+                        <div style={{ ...s.avatar, background: A + '18', color: A }}>
+                          {((b as { profiles?: { display_name?: string } }).profiles?.display_name ?? 'U')[0]}
+                        </div>
                         <div>
-                          <div style={s.playerName}>{b.playerName}</div>
-                          <div style={s.playerSub}>{b.playerPhone}</div>
+                          <div style={s.playerName}>{(b as { profiles?: { display_name?: string } }).profiles?.display_name ?? 'Guest'}</div>
+                          <div style={s.playerSub}>{b.payment_method ?? 'gcash'}</div>
                         </div>
                       </div>
                     </td>
-                    <td style={s.td}>{b.courtName}</td>
+                    <td style={s.td}>{b.courts?.display_name ?? b.courts?.name ?? 'Court'}</td>
                     <td style={{ ...s.td, color:'#64748b' }}>{b.date}</td>
-                    <td style={{ ...s.td, fontWeight:700 }}>₱{b.amount.toLocaleString()}</td>
+                    <td style={{ ...s.td, fontWeight:700 }}>₱{Number(b.total_amount).toLocaleString()}</td>
                     <td style={s.td}>
                       <span style={{ ...s.badge, background: SC[b.status]+'18', color: SC[b.status] }}>
                         {SL[b.status]}

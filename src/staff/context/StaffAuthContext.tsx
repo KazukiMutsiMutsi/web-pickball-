@@ -22,6 +22,7 @@ export function StaffAuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<StaffUser | null>(null);
 
   const login = async (email: string, password: string) => {
+    // Static credentials — no backend needed for staff auth
     if (email === 'staff@picklepro.com' && password === 'staff123') {
       setUser(MOCK_STAFF);
     } else {

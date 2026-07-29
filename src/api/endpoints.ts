@@ -1,30 +1,38 @@
-// Centralised API endpoint definitions
-
 export const ENDPOINTS = {
-  auth: {
-    login: '/auth/login',
-    register: '/auth/register',
-    logout: '/auth/logout',
-  },
+  // Courts (public)
   courts: {
-    list: '/courts',
-    detail: (id: string) => `/courts/${id}`,
+    list:             '/courts',
+    availability:     '/courts/availability',          // ?date=YYYY-MM-DD
+    courtAvail:       (id: string) => `/courts/${id}/availability`, // ?date=YYYY-MM-DD
+    gcash:            '/gcash',
   },
+  // Bookings (auth required)
   bookings: {
-    list: '/bookings',
-    create: '/bookings',
-    cancel: (id: string) => `/bookings/${id}/cancel`,
+    create:           '/bookings',
+    pay:              (id: string) => `/bookings/${id}/pay`,
+    me:               '/bookings/me',
+    detail:           (id: string) => `/bookings/${id}`,
+    qr:               (id: string) => `/bookings/${id}/qr`,
+    cancel:           (id: string) => `/bookings/${id}/cancel`,
   },
-  payments: {
-    create: '/payments',
-    detail: (id: string) => `/payments/${id}`,
-  },
+  // Notifications (auth required)
   notifications: {
-    list: '/notifications',
-    markRead: (id: string) => `/notifications/${id}/read`,
+    list:             '/notifications',
+    markRead:         (id: string) => `/notifications/${id}/read`,
+    markAllRead:      '/notifications/read-all',
   },
-  profile: {
-    get: '/profile',
-    update: '/profile',
+  // Payments (auth required)
+  payments: {
+    gcash:            '/payments/gcash',
+    status:           (bookingId: string) => `/payments/status/${bookingId}`,
+  },
+  // Admin (admin role required)
+  admin: {
+    bookings:         '/admin/bookings',
+    updateBooking:    (id: string) => `/admin/bookings/${id}/status`,
+    courts:           '/admin/courts',
+    updateCourt:      (id: string) => `/admin/courts/${id}`,
+    deleteCourt:      (id: string) => `/admin/courts/${id}`,
+    updateGcash:      '/admin/gcash',
   },
 } as const;

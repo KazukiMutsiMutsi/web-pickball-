@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { getAllBookings, getAllCourts } from '@/src/booking/bookingStore';
+import React, { useState, useEffect } from 'react';
+import { adminService } from '../../services/admin.service';
+import type { ApiBooking } from '../../services/bookings.service';
 import type { AdminBooking } from '../types';
 
 const A = '#6366f1';
@@ -17,12 +18,45 @@ function SearchIcon() {
   return <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round"><path d="M21 21l-4.35-4.35M17 11A6 6 0 105 11a6 6 0 0012 0z" /></svg>;
 }
 
+function mapBooking(b: ApiBooking): AdminBooking {
+  return {
+    id:           b.id,
+    playerName:   (b as { profiles?: { display_name: string } }).profiles?.display_name ?? 'Guest',
+    playerPhone:  '',
+    courtId:      b.court_id,
+    courtName:    b.courts?.display_name ?? b.courts?.name ?? 'Court',
+    date:         b.date,
+    startTime:    b.start_slot,
+    endTime:      b.end_slot,
+    durationHrs:  b.duration_hours,
+    amount:       Number(b.total_amount),
+    paid:         b.status === 'confirmed' || b.status === 'completed',
+    status:       b.status as AdminBooking['status'],
+  };
+}
+
 export default function AdminBookings() {
-  const [bookings] = useState<AdminBooking[]>(getAllBookings() as AdminBooking[]);
-  const [search,  setSearch]  = useState('');
-  const [statusF, setStatusF] = useState('all');
-  const [courtF,  setCourtF]  = useState('all');
-  const courts = getAllCourts();
+  const [bookings, setBookings] = useState<AdminBooking[]>([]);
+  const [courts,   setCourts]   = useState<{ id: string; name: string }[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [search,   setSearch]   = useState('');
+  const [statusF,  setStatusF]  = useState('all');
+  const [courtF,   setCourtF]   = useState('all');
+
+  useEffect(() => {
+    Promise.all([
+      adminService.getBookings(),
+      fetch(`${import.meta.env.VITE_API_URL ?? 'http://localhost:5000'}/api/courts`).then(r => r.json()),
+    ])
+      .then(([b, { courts: c }]) => {
+        setBookings(b.map(mapBooking));
+        setCourts(c.map((ct: { id: string; name: string }) => ({ id: ct.id, name: ct.name })));
+      })
+      .catch(err => console.error('Failed to load bookings:', err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading bookings...</div>;
 
   const filtered = bookings.filter(b => {
     if (statusF !== 'all' && b.status !== statusF) return false;
